@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const db = require('./database');
 
 const app = express();
@@ -9,6 +10,48 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static('.'));
+
+// Admin credentials (in production, use environment variables and hashed passwords)
+const ADMIN_USERNAME = 'admin';
+const ADMIN_PASSWORD = 'admin123';
+
+// Simple token storage (in production, use JWT or session management)
+const validTokens = new Set();
+
+// Generate token
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// Middleware to check authentication
+function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  const token = authHeader.substring(7);
+  
+  if (!validTokens.has(token)) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+  
+  next();
+}
+
+// Admin login
+app.post('/api/admin/login', (req, res) => {
+  const { username, password } = req.body;
+  
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    const token = generateToken();
+    validTokens.add(token);
+    res.json({ success: true, token });
+  } else {
+    res.status(401).json({ error: 'Invalid credentials' });
+  }
+});
 
 // Create booking
 app.post('/api/bookings', (req, res) => {
@@ -32,8 +75,8 @@ app.post('/api/bookings', (req, res) => {
   }
 });
 
-// Get all bookings
-app.get('/api/bookings', (req, res) => {
+// Get all bookings (protected)
+app.get('/api/bookings', requireAuth, (req, res) => {
   try {
     const bookings = db.getAllBookings.all();
     res.json(bookings);
@@ -43,8 +86,8 @@ app.get('/api/bookings', (req, res) => {
   }
 });
 
-// Get booking by ID
-app.get('/api/bookings/:id', (req, res) => {
+// Get booking by ID (protected)
+app.get('/api/bookings/:id', requireAuth, (req, res) => {
   try {
     const booking = db.getBookingById.get(req.params.id);
     if (!booking) {
@@ -57,8 +100,8 @@ app.get('/api/bookings/:id', (req, res) => {
   }
 });
 
-// Update booking status
-app.patch('/api/bookings/:id/status', (req, res) => {
+// Update booking status (protected)
+app.patch('/api/bookings/:id/status', requireAuth, (req, res) => {
   try {
     const { status } = req.body;
     if (!['pending', 'confirmed', 'completed', 'cancelled'].includes(status)) {
@@ -73,8 +116,8 @@ app.patch('/api/bookings/:id/status', (req, res) => {
   }
 });
 
-// Delete booking
-app.delete('/api/bookings/:id', (req, res) => {
+// Delete booking (protected)
+app.delete('/api/bookings/:id', requireAuth, (req, res) => {
   try {
     db.deleteBooking.run(req.params.id);
     res.json({ success: true, message: 'Booking deleted successfully' });
@@ -84,8 +127,8 @@ app.delete('/api/bookings/:id', (req, res) => {
   }
 });
 
-// Get statistics
-app.get('/api/stats', (req, res) => {
+// Get statistics (protected)
+app.get('/api/stats', requireAuth, (req, res) => {
   try {
     const stats = db.getStats.get();
     res.json(stats);

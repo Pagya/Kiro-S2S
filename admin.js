@@ -2,10 +2,42 @@ const API_URL = 'http://localhost:3000/api';
 let allBookings = [];
 let currentFilter = 'all';
 
+// Check authentication
+function checkAuth() {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+        window.location.href = 'login.html';
+        return false;
+    }
+    return token;
+}
+
+// Logout function
+function logout() {
+    localStorage.removeItem('adminToken');
+    window.location.href = 'login.html';
+}
+
+// Get auth headers
+function getAuthHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${checkAuth()}`
+    };
+}
+
 // Load statistics
 async function loadStats() {
     try {
-        const response = await fetch(`${API_URL}/stats`);
+        const response = await fetch(`${API_URL}/stats`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         const stats = await response.json();
         
         document.getElementById('totalBookings').textContent = stats.total || 0;
@@ -19,8 +51,18 @@ async function loadStats() {
 
 // Load bookings
 async function loadBookings() {
+    if (!checkAuth()) return;
+    
     try {
-        const response = await fetch(`${API_URL}/bookings`);
+        const response = await fetch(`${API_URL}/bookings`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        
         allBookings = await response.json();
         
         displayBookings(allBookings);
@@ -92,7 +134,7 @@ async function updateStatus(id, status) {
     try {
         const response = await fetch(`${API_URL}/bookings/${id}/status`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ status })
         });
         
@@ -113,7 +155,8 @@ async function deleteBooking(id) {
     
     try {
         const response = await fetch(`${API_URL}/bookings/${id}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: getAuthHeaders()
         });
         
         if (response.ok) {
